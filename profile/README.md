@@ -331,24 +331,34 @@ flowchart LR
 
 ---
 
-## 3. The four composition shapes
+## 3. The six composition shapes
 
-Classification applies independently at each node. Four shapes appear in practice:
+Classification applies independently at each node. Once a node is classified as Workflow or Agent, its composition shape depends on what kind of children it contains. Six pure shapes appear in practice (real systems often mix them):
 
-| Composition            | Macro       | Worker      | Typical use case                                   | Concrete example                                                |
-|------------------------|-------------|-------------|----------------------------------------------------|-----------------------------------------------------------------|
-| Workflow of workflows  | Workflow    | Workflow    | Deterministic pipelines with deterministic stages  | ETL where each stage is a fixed multi-step procedure            |
-| **Workflow of agents** | **Workflow**| **Agent**   | **Closed macro process with flexible sub-tasks**   | **CI/CD agent pipeline (your simple-agent-factory)**            |
-| Agent of workflows     | Agent       | Workflow    | Open-ended task whose tools are fixed procedures   | Coding agent that calls a `run_test_suite` tool that is internally a fixed workflow |
-| Agent of agents        | Agent       | Agent       | Open-ended task with open-ended delegated sub-tasks | Multi-agent research with a dynamic orchestrator + researchers + critics |
+| Composition                  | Macro        | Workers           | Typical use case                                      | Concrete example                                                |
+|------------------------------|--------------|-------------------|-------------------------------------------------------|-----------------------------------------------------------------|
+| Workflow of augmented LLMs   | Workflow     | Atomic LLM / tool calls | Simple closed tasks decomposed into fixed steps  | The five workflows in *Building Effective Agents*: prompt chaining, routing, parallelization, orchestrator-workers, evaluator-optimizer |
+| Workflow of workflows        | Workflow     | Workflows         | Multi-stage deterministic pipelines                   | ETL where each stage is itself a fixed multi-step procedure     |
+| **Workflow of agents**       | **Workflow** | **Agents**        | **Closed macro process with flexible sub-tasks**      | **CI/CD agent pipeline (your simple-agent-factory)**            |
+| **Agent with tools**         | **Agent**    | **Atomic ops**    | **Open-ended task, single model orchestrating**       | **Claude.ai chat, Claude Code, most production agents**         |
+| Agent of workflows           | Agent        | Workflows         | Open-ended task whose sub-procedures are fixed        | Agent whose `run_test_suite` tool is internally a fixed workflow |
+| Agent of agents              | Agent        | Agents            | Open-ended task with open-ended delegated sub-tasks   | Dynamic multi-agent research with orchestrator + researchers + critics |
 
-The four shapes can nest further. An agent-of-agents can contain agents-of-workflows, and so on. Depth is unbounded; classification at each node remains independent.
+Two notes:
+
+The "Atomic ops" category covers both augmented LLM calls and deterministic tool calls (`read_file`, `query_osv`, `run_python`). From the parent's perspective they are indistinguishable — both are non-composite, single-step operations.
+
+In practice, children are often **mixed**: a workflow might have one step that is an augmented LLM call, another that is an agent, another that is a sub-workflow. The six shapes above are pedagogical reference points; real systems usually compose heterogeneously. The classification then applies per child.
+
+Composition is recursive without depth limit. An agent-of-agents can contain agents-of-workflows, and so on. Classification at each node remains independent.
 
 ---
 
-## 4. Worked example: workflow-of-agents
+## 4. Worked examples
 
-Concrete instance of the second row — a fixed macro pipeline (workflow) whose stages are agents.
+### 4.1 Workflow of agents
+
+A fixed macro pipeline (workflow) whose stages are agents.
 
 ```mermaid
 flowchart TB
@@ -384,26 +394,64 @@ Reading this:
 - **Each worker is an agent.** The LLM inside chooses tools and stopping point on its own. Path space is open inside each box.
 - **The composite is an *agentic workflow*** — a workflow whose components happen to be agentic.
 
+### 4.2 Agent with tools
+
+The most common production shape: a single agent orchestrating atomic tools, with a human-in-the-loop checkpoint between turns. This is what Claude.ai chat, Claude Code, and most chat-style agents are.
+
+```mermaid
+flowchart LR
+    User([Human]) -->|message| Loop((LLM))
+    Loop -->|"tool_use<br/>(chosen at runtime)"| Tools["Tools<br/>web_search, view, create_file,<br/>read_file, run_python, ..."]
+    Tools -->|tool_result| Loop
+    Loop -->|end_turn| User
+    
+    style Loop fill:#f0e8ff
+```
+
+Reading this:
+
+- **Single agent at the top level.** The LLM owns the control flow within each turn. No workflow wraps it.
+- **Tools are atomic.** Deterministic functions or single LLM calls. No sub-agents, no sub-workflows.
+- **Human-in-the-loop is orthogonal to the shape.** The human checkpoint between turns is not a workflow step; it is the point where the agent yields control and waits for new input. The agent could equally well run unattended (e.g. a scripted Claude Code invocation) without changing its classification.
+- This is the bottom-right of the §5 diagram, and where most production agents live.
+
 ---
 
 ## 5. Classification rule
 
-For any node in the composition tree:
+For any node in the composition tree, walk the diagram top-down. Q1 distinguishes atomic from compositional nodes. Q2 splits compositional nodes into workflow vs agent based on who owns the control flow. Q3 looks at the node's immediate children to identify the composition shape.
 
 ```mermaid
 flowchart TB
     Q1{Does this node<br/>call other components?}
-    Q1 -->|no| AugLLM[Augmented LLM]
-    Q1 -->|yes| Q2{Who chooses the<br/>next action / component?}
+    Q1 -->|no| AugLLM[Augmented LLM<br/>ATOM]
+    Q1 -->|yes| Q2{Who chooses the<br/>next action?}
     Q2 -->|developer code| WF[Workflow]
     Q2 -->|the LLM at runtime| Ag[Agent]
+    
+    WF --> Q3W{What kind of<br/>children?}
+    Ag --> Q3A{What kind of<br/>children?}
+    
+    Q3W -->|atomic ops / LLM calls| WoAL["<b>Workflow of augmented LLMs</b><br/>prompt chain, routing,<br/>parallelization, eval-optimizer"]
+    Q3W -->|workflows| WoW["<b>Workflow of workflows</b><br/>deterministic pipelines<br/>with deterministic stages"]
+    Q3W -->|agents| WoA["<b>Workflow of agents</b><br/>closed macro process<br/>with flexible sub-tasks"]
+    
+    Q3A -->|atomic ops / LLM calls| AoAL["<b>Agent with tools</b><br/>standard ReAct,<br/>Claude.ai chat, Claude Code"]
+    Q3A -->|workflows| AoW["<b>Agent of workflows</b><br/>open-ended task with<br/>fixed sub-procedures"]
+    Q3A -->|agents| AoA["<b>Agent of agents</b><br/>dynamic multi-agent<br/>delegation"]
     
     style AugLLM fill:#e8f4f8
     style WF fill:#fff4e6
     style Ag fill:#f0e8ff
+    style WoAL fill:#fff4e6
+    style WoW fill:#fff4e6
+    style WoA fill:#fff4e6
+    style AoAL fill:#f0e8ff
+    style AoW fill:#f0e8ff
+    style AoA fill:#f0e8ff
 ```
 
-Apply the rule at each level. Classification at any node is independent of its parent's or children's classifications.
+Apply the rule at each level — first to the root, then recursively to each child. Classification at any node is independent of its parent's or children's classifications. When children are mixed (some atomic, some agents, some workflows), apply Q3 per child rather than seeking a single label for the parent.
 
 ---
 
