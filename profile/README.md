@@ -1,13 +1,18 @@
 # Simple Agent Factory
 
 > An **AI-driven, self-healing test-automation factory** for Java SOAP services.
-> Three Claude agents detect bugs in production, fix the code, ship the patch, and close the ticket — without a human in the loop.
+> Three Claude agents detect bugs in production, fix the code, ship the patch, and close the ticket, without a human in the loop.
 
 ---
 
+## demo recordings
+
+* QA Tester agent: ![demo_agent_qa.mp4](./docs/demo_agent_qa.mp4)
+* Software Developer agent: ![demo_agent_dev.mp4](./docs/demo_agent_dev.mp4)
+
 ## The pitch in one sentence
 
-A faulty SOAP operation is detected against its written spec, a Jira bug is filed, a developer agent clones the repo, edits the Java source with `Math.*Exact` safe arithmetic, pushes to `main`, GitHub Actions deploys the fat JAR to a DigitalOcean droplet behind Nginx + Let's Encrypt, and a release agent verifies the deployment and closes the ticket — end to end, on its own.
+A faulty SOAP operation is detected against its written spec, a Jira bug is filed, a developer agent clones the repo, edits the Java source with `Math.*Exact` safe arithmetic, pushes to `main`, GitHub Actions deploys the fat JAR to a DigitalOcean droplet behind Nginx + Let's Encrypt, and a release agent verifies the deployment and closes the ticket, end to end, on its own.
 
 ---
 
@@ -70,14 +75,14 @@ flowchart LR
 sequenceDiagram
     autonumber
     participant Spec as arithmetics_specifications.md
-    participant QA as Agent 1 — QA
+    participant QA as Agent 1, QA
     participant SOAP as ai-maxxing.cc (SOAP)
     participant Jira
-    participant Dev as Agent 2 — Dev
+    participant Dev as Agent 2, Dev
     participant GH as GitHub
     participant GHA as GitHub Actions
     participant Droplet as DigitalOcean droplet
-    participant Rel as Agent 3 — Release
+    participant Rel as Agent 3, Release
 
     QA->>Spec: read expected behaviour
     QA->>SOAP: fetch WSDL + run test cases
@@ -103,7 +108,7 @@ sequenceDiagram
 
 ---
 
-## Jira workflow — the agents' shared memory
+## Jira workflow, the agents' shared memory
 
 The three agents never talk to each other directly. They coordinate via **Jira issue status**, which acts as a durable blackboard.
 
@@ -116,7 +121,7 @@ stateDiagram-v2
     InReview --> InReview : deploy failed → comment, keep open
 ```
 
-Every issue carries the `[AID]` prefix in its summary — a soft access control enforced in agent code so the shared `SSI` project stays uncontaminated by other use cases.
+Every issue carries the `[AID]` prefix in its summary, a soft access control enforced in agent code so the shared `SSI` project stays uncontaminated by other use cases.
 
 ---
 
@@ -125,10 +130,10 @@ Every issue carries the `[AID]` prefix in its summary — a soft access control 
 | # | Repo | Role | Stack |
 |---|------|------|-------|
 | 0 | [`0_orchestration`](../../0_orchestration) | Sequencing the full pipeline (`qa → dev-loop → CI/CD poll → release`) | Python 3.11 |
-| 1 | [`01_soap_arithmetics`](../../01_soap_arithmetics) | The target service under test — Java SOAP arithmetic with intentional bugs | Java 21, Jakarta XML WS 4.0, Maven, Ansible |
-| 2 | [`02_agent1_qa`](../../02_agent1_qa) | QA Engineer — WSDL introspection + dynamic SOAP testing + Jira reporting | Python, Zeep, Anthropic SDK |
-| 3 | [`03_agent2_dev`](../../03_agent2_dev) | Software Developer — clones repo, locates the bug, patches the Java, pushes | Python, GitPython, Anthropic SDK |
-| 4 | [`04_agent3_release`](../../04_agent3_release) | Release Engineer — verifies the GitHub Actions run, closes the ticket | Python, GitHub REST API, Anthropic SDK |
+| 1 | [`01_soap_arithmetics`](../../01_soap_arithmetics) | The target service under test, Java SOAP arithmetic with intentional bugs | Java 21, Jakarta XML WS 4.0, Maven, Ansible |
+| 2 | [`02_agent1_qa`](../../02_agent1_qa) | QA Engineer, WSDL introspection + dynamic SOAP testing + Jira reporting | Python, Zeep, Anthropic SDK |
+| 3 | [`03_agent2_dev`](../../03_agent2_dev) | Software Developer, clones repo, locates the bug, patches the Java, pushes | Python, GitPython, Anthropic SDK |
+| 4 | [`04_agent3_release`](../../04_agent3_release) | Release Engineer, verifies the GitHub Actions run, closes the ticket | Python, GitHub REST API, Anthropic SDK |
 
 ---
 
@@ -136,13 +141,13 @@ Every issue carries the `[AID]` prefix in its summary — a soft access control 
 
 ```mermaid
 flowchart TB
-    subgraph QA["Agent 1 — QA Engineer"]
+    subgraph QA["Agent 1, QA Engineer"]
         QA1["fetch_wsdl_operations"]
         QA2["run_soap_test"]
         QA3["create_jira_bug"]
     end
 
-    subgraph DEV["Agent 2 — Software Developer"]
+    subgraph DEV["Agent 2, Software Developer"]
         D1["transition_jira_issue"]
         D2["list_repo_files"]
         D3["read_repo_file"]
@@ -150,7 +155,7 @@ flowchart TB
         D5["commit_and_push"]
     end
 
-    subgraph REL["Agent 3 — Release Engineer"]
+    subgraph REL["Agent 3, Release Engineer"]
         R1["get_latest_github_run"]
         R2["get_github_run_jobs"]
         R3["add_jira_comment"]
@@ -158,7 +163,7 @@ flowchart TB
     end
 ```
 
-Each agent runs a standard Claude tool-use loop (`claude-opus-4-6`) — the LLM picks tools, the Python harness executes them, results are fed back until the model emits `end_turn`.
+Each agent runs a standard Claude tool-use loop (`claude-opus-4-6`), the LLM picks tools, the Python harness executes them, results are fed back until the model emits `end_turn`.
 
 ---
 
@@ -214,10 +219,10 @@ flowchart LR
 
 ## Security posture (MVP-honest)
 
-- **Ticket scoping** — every Jira create / read / update is gated on the `[AID]` prefix, enforced in agent code. Cross-contamination with non-AID tickets in the shared `SSI` project is rejected at the tool call.
-- **Credential scoping** — each agent gets only what it needs: QA has Jira write + WSDL read, Dev has GitHub push via a dedicated machine account's SSH key, Release has read-only Jira + read-only GitHub Actions PAT.
-- **Audit trail** — every action is recorded in Jira (issue history + comments) and GitHub (commit log + Actions runs). Nothing is lost.
-- **MVP caveats** — no human-in-the-loop, no automatic loopback if a fix regresses, single-pass logic. Documented intentionally.
+- **Ticket scoping**, every Jira create / read / update is gated on the `[AID]` prefix, enforced in agent code. Cross-contamination with non-AID tickets in the shared `SSI` project is rejected at the tool call.
+- **Credential scoping**, each agent gets only what it needs: QA has Jira write + WSDL read, Dev has GitHub push via a dedicated machine account's SSH key, Release has read-only Jira + read-only GitHub Actions PAT.
+- **Audit trail**, every action is recorded in Jira (issue history + comments) and GitHub (commit log + Actions runs). Nothing is lost.
+- **MVP caveats**, no human-in-the-loop, no automatic loopback if a fix regresses, single-pass logic. Documented intentionally.
 
 ---
 
@@ -239,4 +244,4 @@ Each agent reads its own `.env` (see `<agent>/.env.example`) and requires `ANTHR
 
 ## Why this matters
 
-Classical test automation is brittle: a renamed field, a tweaked operator, a missing exception type — and the whole script breaks. This factory replaces that brittleness with **agentic flexibility**: each agent reads natural-language specs, introspects live contracts, reasons over real code, and uses the same enterprise tools (Jira, Git, CI) a human team would. The result is a closed remediation loop where the only artifact a human ever needs to read is the final, auto-closed Jira ticket.
+Classical test automation is brittle: a renamed field, a tweaked operator, a missing exception type, and the whole script breaks. This factory replaces that brittleness with **agentic flexibility**: each agent reads natural-language specs, introspects live contracts, reasons over real code, and uses the same enterprise tools (Jira, Git, CI) a human team would. The result is a closed remediation loop where the only artifact a human ever needs to read is the final, auto-closed Jira ticket.
