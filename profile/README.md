@@ -7,8 +7,8 @@
 
 ## demo recordings
 
-* QA Tester agent: ![demo_agent_qa.mp4](./docs/demo_agent_qa.mp4)
-* Software Developer agent: ![demo_agent_dev.mp4](./docs/demo_agent_dev.mp4)
+* QA Tester agent: ![demo_agent_qa.mp4](./docs/demo_agent_qa.mp4?raw=true)
+* Software Developer agent: ![demo_agent_dev.mp4](./docs/demo_agent_dev.mp4?raw=true)
 
 ## The pitch in one sentence
 
