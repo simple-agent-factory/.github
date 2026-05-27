@@ -1,4 +1,4 @@
-# Simple Agent Factory
+# Simple Agentic Workflow
 
 > An **AI-driven, self-healing test-automation factory** for Java SOAP services.
 > Three Claude agents detect bugs in production, fix the code, ship the patch, and close the ticket, without a human in the loop.
@@ -245,3 +245,191 @@ Each agent reads its own `.env` (see `<agent>/.env.example`) and requires `ANTHR
 ## Why this matters
 
 Classical test automation is brittle: a renamed field, a tweaked operator, a missing exception type, and the whole script breaks. This factory replaces that brittleness with **agentic flexibility**: each agent reads natural-language specs, introspects live contracts, reasons over real code, and uses the same enterprise tools (Jira, Git, CI) a human team would. The result is a closed remediation loop where the only artifact a human ever needs to read is the final, auto-closed Jira ticket.
+
+# Agentic Systems — Primitives, Composition, and Classification
+
+A schema for reasoning about LLM-based systems. Distilled from Anthropic's *Building Effective Agents* and extended to handle composite systems (workflow-of-agents, agent-of-workflows, etc.).
+
+---
+
+## 1. The three primitives
+
+There are three building blocks. One is atomic; two are compositional.
+
+```mermaid
+classDiagram
+    class Component {
+        <<abstract>>
+    }
+    class AugmentedLLM {
+        atomic
+        single LLM call
+        + tools, retrieval, memory
+    }
+    class Workflow {
+        compositional
+        developer-authored control flow
+        closed path space
+    }
+    class Agent {
+        compositional
+        model-authored control flow
+        open path space
+    }
+    Component <|-- AugmentedLLM
+    Component <|-- Workflow
+    Component <|-- Agent
+    Workflow o-- "1..*" Component : steps
+    Agent o-- "1..*" Component : tools / sub-components
+```
+
+Composition is recursive: any `Workflow` or `Agent` can contain other `Component`s, including further workflows and agents. Only `AugmentedLLM` is atomic. Every leaf of the composition tree is ultimately an augmented LLM call.
+
+---
+
+## 2. Internal shape of each primitive
+
+### 2.1 Augmented LLM (atom)
+
+A single inference call enhanced with capabilities the model itself can invoke.
+
+```mermaid
+flowchart LR
+    Input([prompt]) --> LLM((LLM))
+    LLM -.uses.-> T[Tools]
+    LLM -.uses.-> R[Retrieval]
+    LLM -.uses.-> M[Memory]
+    LLM --> Output([response])
+```
+
+### 2.2 Workflow — developer-authored control flow
+
+The path through the system is encoded in code. Branches are allowed but enumerable. The full execution graph can be drawn before runtime.
+
+```mermaid
+flowchart LR
+    Start([input]) --> S1[Step 1]
+    S1 --> S2{Decision}
+    S2 -->|branch A| S3a[Step 3a]
+    S2 -->|branch B| S3b[Step 3b]
+    S3a --> S4[Step 4]
+    S3b --> S4
+    S4 --> End([output])
+```
+
+### 2.3 Agent — model-authored control flow
+
+The LLM chooses what to do next at every step. The execution graph is generated at runtime and is not enumerable in advance.
+
+```mermaid
+flowchart LR
+    Start([prompt]) --> Loop((LLM))
+    Loop -->|"tool_use<br/>(chosen by LLM)"| Tool[Selected tool]
+    Tool -->|tool_result| Loop
+    Loop -->|end_turn| End([response])
+```
+
+---
+
+## 3. The four composition shapes
+
+Classification applies independently at each node. Four shapes appear in practice:
+
+| Composition            | Macro       | Worker      | Typical use case                                   | Concrete example                                                |
+|------------------------|-------------|-------------|----------------------------------------------------|-----------------------------------------------------------------|
+| Workflow of workflows  | Workflow    | Workflow    | Deterministic pipelines with deterministic stages  | ETL where each stage is a fixed multi-step procedure            |
+| **Workflow of agents** | **Workflow**| **Agent**   | **Closed macro process with flexible sub-tasks**   | **CI/CD agent pipeline (your simple-agent-factory)**            |
+| Agent of workflows     | Agent       | Workflow    | Open-ended task whose tools are fixed procedures   | Coding agent that calls a `run_test_suite` tool that is internally a fixed workflow |
+| Agent of agents        | Agent       | Agent       | Open-ended task with open-ended delegated sub-tasks | Multi-agent research with a dynamic orchestrator + researchers + critics |
+
+The four shapes can nest further. An agent-of-agents can contain agents-of-workflows, and so on. Depth is unbounded; classification at each node remains independent.
+
+---
+
+## 4. Worked example: workflow-of-agents
+
+Concrete instance of the second row — a fixed macro pipeline (workflow) whose stages are agents.
+
+```mermaid
+flowchart TB
+    User([User invokes]) --> Orch
+    
+    subgraph Macro["Orchestrator — WORKFLOW (closed path)"]
+        direction TB
+        Orch[run_qa] --> QABranch{processed?}
+        QABranch -->|yes| DevStep[run_dev_loop]
+        QABranch -->|no| Skip[End early]
+        DevStep --> Poll[poll_cicd]
+        Poll --> Rel[run_release]
+        Rel --> Done[End]
+    end
+    
+    QAAgent["QA Agent — AGENT (open path)<br/>tools: fetch_wsdl, run_soap_test, create_jira_bug<br/>loop until end_turn"]
+    DevAgent["Dev Agent — AGENT (open path)<br/>tools: edit_file, run_tests, commit, push<br/>loop until end_turn"]
+    RelAgent["Release Agent — AGENT (open path)<br/>tools: tag, deploy, update_jira, notify<br/>loop until end_turn"]
+    
+    Orch -.invokes.-> QAAgent
+    DevStep -.invokes.-> DevAgent
+    Rel -.invokes.-> RelAgent
+    
+    style Macro fill:#e8f4f8
+    style QAAgent fill:#fff4e6
+    style DevAgent fill:#fff4e6
+    style RelAgent fill:#fff4e6
+```
+
+Reading this:
+
+- **Macro layer is a workflow.** The four-stage pipeline is hardcoded in `orchestrator.py`. Every execution trace is enumerable before runtime.
+- **Each worker is an agent.** The LLM inside chooses tools and stopping point on its own. Path space is open inside each box.
+- **The composite is an *agentic workflow*** — a workflow whose components happen to be agentic.
+
+---
+
+## 5. Classification rule
+
+For any node in the composition tree:
+
+```mermaid
+flowchart TB
+    Q1{Does this node<br/>call other components?}
+    Q1 -->|no| AugLLM[Augmented LLM]
+    Q1 -->|yes| Q2{Who chooses the<br/>next action / component?}
+    Q2 -->|developer code| WF[Workflow]
+    Q2 -->|the LLM at runtime| Ag[Agent]
+    
+    style AugLLM fill:#e8f4f8
+    style WF fill:#fff4e6
+    style Ag fill:#f0e8ff
+```
+
+Apply the rule at each level. Classification at any node is independent of its parent's or children's classifications.
+
+---
+
+## 6. Design implications
+
+Properties that follow from the schema and matter when designing real systems:
+
+- **Auditability composes.** Workflow nodes are auditable by static enumeration of paths. Agent nodes are auditable behaviorally (evals, traces, monitoring). A workflow-of-agents inherits both properties at their respective layers.
+- **Failure handling layers naturally.** A workflow can wrap retries, timeouts, and circuit-breakers around its agent workers. The agent does not need to be reliable on its own — the workflow's scaffolding makes the composite reliable.
+- **Security is best enforced at workflow boundaries.** Each agent worker receives only the credentials and tools its scope requires. An agent cannot exceed boundaries it never had access to.
+- **"Climb only as high as needed" applies at every level.** The right altitude often varies between layers. The macro pipeline can be a workflow even when individual stages need agentic flexibility, and vice versa.
+- **The right shape is usually workflow-of-agents.** Pure agent-of-agents (the popular "multi-agent system" framing) sacrifices too much macro predictability for most production work. Pure workflow-of-augmented-LLMs sacrifices too much flexibility for non-trivial tasks. The mixed shape is where most well-engineered real systems land.
+
+---
+
+## 7. Vocabulary
+
+- **Augmented LLM** — single LLM call with tools, retrieval, and/or memory. Atomic.
+- **Workflow** — composition with developer-authored control flow. Closed path space.
+- **Agent** — composition with model-authored control flow. Open path space.
+- **Agentic component** — generic term for either a workflow or an agent (anything composing augmented LLMs).
+- **Agentic workflow** — a workflow whose components are agents. The most common production shape.
+- **Agentic system** — informal umbrella term; prefer one of the precise terms above.
+
+---
+
+## References
+
+- *Building Effective Agents* (Anthropic, Dec 2024): https://www.anthropic.com/engineering/building-effective-agents
